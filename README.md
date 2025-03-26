@@ -31,30 +31,32 @@ AZURE_STORAGE_ACCOUNT_ACCESS_KEY
 6. Push your changes, the Actions will fire on the `main` branch, they will plan and apply your changes (Beware, this will create an AKS cluster based on the configurations you provided on your `dev.tfvars` file)
 
 ## How to run (Locally)
-Follow the steps 1-3 of the [How to run (Github Actions)](#How-to-run-(Github-Actions))
 
-cd into the `terraform` directory
+1. Follow the steps 1-3 of the [How to run (Github Actions)](#How-to-run-(Github-Actions))
 
-Initiate the providers: 
+2. cd into the `terraform` directory
+
+3. Initiate the providers: 
 
 `terraform init -backend-config="./backend.config" -input=false`
 
-Run the plan: `terraform plan -var-file="./tfvars/dev.tfvars"`
+4. Run the plan: 
 
+`terraform plan -var-file="./tfvars/dev.tfvars"`
 
-If you are ok with the changes, apply: 
+5. If you are ok with the changes, apply: 
 
 `terraform apply -var-file="./tfvars/dev.tfvars" -auto-approve`
 
-This will create all the resources, specially the ACR that we'll need for the docker image steps
+6. This will create all the resources, specially the ACR that we'll need for the docker image steps
 
-Once created, `az login` into the same account that the ACR lives
+7. Once created, `az login` into the same account that the ACR lives
 
-Now login into acr: 
+8. Now login into acr: 
 
 `az acr login --name <name of the acr>`
 
-Build, tag and push the image
+9. Build, tag and push the image
 
 ```bash
 docker build -t hellochallenge:latest .

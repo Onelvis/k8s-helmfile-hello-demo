@@ -3,15 +3,12 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "resource_group" {
   location = var.location
   name     = var.resource_group_name
-  # name     = "stg-eastus"
 }
 
 resource "azurerm_kubernetes_cluster" "k8s" {
   location            = azurerm_resource_group.resource_group.location
-  # name                = "stg-hello-cluster"
   name                = var.aks_cluster_name
   resource_group_name = azurerm_resource_group.resource_group.name
-  # dns_prefix          = "dns-stg-hello-cluster"
   dns_prefix          = var.aks_dns_prefix
 
   identity {
@@ -41,7 +38,6 @@ resource "azurerm_kubernetes_cluster" "k8s" {
 }
 
 resource "azurerm_container_registry" "acr" {
-  # name                = "n5challengehelloacr1"
   name                = var.acr_name
   resource_group_name = azurerm_resource_group.resource_group.name
   location            = azurerm_resource_group.resource_group.location

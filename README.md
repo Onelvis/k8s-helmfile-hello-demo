@@ -1,9 +1,9 @@
 # k8s-helmfile-hello-demo
 
-This repository shows a demo of a AKS cluster with a modified version of the [nginxdemos/hello](https://hub.docker.com/r/nginxdemos/hello/) docker image, which includes both an environment variable and the value of a secret stored in Azure's Key Vault.
+This repository shows a demo of an AKS cluster with a modified version of the [nginxdemos/hello](https://hub.docker.com/r/nginxdemos/hello/) docker image, which includes both an environment variable and the value of a secret stored in Azure's Key Vault.
 
 ## Prerequisites
-1. An Azure account and create a Service Principal with a Client Secret, you can follow the instructions in [Terraform provider's auth methods](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_client_secret)
+1. An Azure account and a Service Principal with a Client Secret, you can follow the instructions in [Terraform provider's auth methods](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs/guides/service_principal_client_secret)
 2. An Azure storage account and a container for the Terraform state storage.
 
 ## How to run (Github Actions)

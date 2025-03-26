@@ -1,0 +1,15 @@
+replicaCount: 5
+
+image:
+  repository: n5challengehelloacr1.azurecr.io/challenge/hellochallenge
+  tag: latest
+
+service:
+  type: LoadBalancer
+  port: 8080
+
+env:
+  stage: prod
+
+secret:
+  secretValue: "Shhh! this is a secret"

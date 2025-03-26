@@ -1,0 +1,14 @@
+replicaCount: 1
+
+image:
+  repository: n5challengehelloacr1.azurecr.io/challenge/hellochallenge
+  tag: latest
+
+service:
+  type: LoadBalancer
+  port: 80
+
+env:
+  stage: dev
+
+azureVaultSecret: ref+azurekeyvault://hello-keyvault/demo-secret

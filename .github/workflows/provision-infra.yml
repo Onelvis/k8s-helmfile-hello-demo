@@ -1,0 +1,143 @@
+name: 'Terraform provisioning'
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+
+# env:
+#   region: "us-east-1"
+
+jobs:
+  terraform-plan:
+    name: Terraform plan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        id: init
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: terraform init -backend-config="./backend.config" -input=false
+
+      - name: Terraform Plan
+        id: plan
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: terraform plan -var-file="./tfvars/dev.tfvars" -out tfapply
+
+      - name: List files in working directory
+        run: ls -la
+
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tfapply
+          path: ./terraform/tfapply
+
+  terraform-apply:
+    name: Terraform apply
+    needs: terraform-plan
+    outputs:
+      acr_login_server: ${{ steps.get-acr.outputs.acr_server }}
+      acr_name: ${{ steps.get-acr.outputs.acr_name }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfapply
+          path: ./terraform
+
+      - name: Terraform Init
+        id: init
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: terraform init -backend-config="./backend.config" -input=false
+
+      - name: Terraform Apply
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: terraform apply -var-file="./tfvars/dev.tfvars" -auto-approve tfapply
+
+      - name: Get Terraform outputs
+        id: get-acr
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: |
+          acr_server=$(terraform output -raw acr_login_server)
+          acr_name=$(terraform output -raw acr_name)
+          echo "acr_name=$acr_name"
+          echo "acr_server=$acr_server"
+          echo "acr_name=$acr_name" >> $GITHUB_OUTPUT
+          echo "acr_server=$acr_server" >> $GITHUB_OUTPUT
+
+  docker:
+    name: Build and push docker image
+    needs: terraform-apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./docker
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Build docker image
+        run: docker build -t hellochallenge:latest .
+
+      - name: Tag image
+        run: docker tag hellochallenge:latest ${{ needs.terraform-apply.outputs.acr_login_server }}/challenge/hellochallenge:latest
+
+      - name: ACR Login
+        run: az acr login --name ${{ needs.terraform-apply.outputs.acr_name }}
+
+      - name: Push to ACR
+        run: docker push ${{ needs.terraform-apply.outputs.acr_login_server }}/challenge/hellochallenge

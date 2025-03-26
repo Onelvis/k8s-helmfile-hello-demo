@@ -1,0 +1,4 @@
+resource_group_name  = "<Put here the resource group name where your storage account lives>"
+storage_account_name = "<Put here the name of the storage account>"
+container_name       = "tfstate"
+key                  = "terraform.tfstate"

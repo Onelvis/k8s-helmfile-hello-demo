@@ -1,0 +1,15 @@
+## General
+location = "eastus"
+resource_group_name = "stg-eastus"
+
+## AKS
+aks_cluster_name = "stg-hello-cluster"
+aks_dns_prefix = "dns-stg-hello-cluster"
+
+## ACR
+
+acr_name = "n5challengehelloacr1"
+
+# KeyVault
+
+keyvault_name = "hello-keyvault"

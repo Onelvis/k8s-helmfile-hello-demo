@@ -1,0 +1,14 @@
+replicaCount: {{ .Values | get "replicaCount" 2 }}
+
+image:
+  repository: {{ .Values.image | get "repository" "n5challengehelloacr1.azurecr.io/challenge/hellochallenge" }}
+  tag: {{ .Values.image | get "tag" "latest" }}
+
+service:
+  type: {{ .Values.service | get "type" "LoadBalancer" }}
+  port: {{ .Values.service | get "port" 8080 }}
+
+env:
+  stage: {{ .Values.env | get "stage" "developers" }}
+
+azureVaultSecret: {{ .Values | get  "azureVaultSecret" "ref+azurekeyvault://hello-keyvault/hello-demo-secret-dev" }}

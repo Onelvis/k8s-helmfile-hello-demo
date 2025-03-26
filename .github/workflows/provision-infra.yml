@@ -7,9 +7,6 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
 
-# env:
-#   region: "us-east-1"
-
 jobs:
   terraform-plan:
     name: Terraform plan
@@ -60,8 +57,9 @@ jobs:
     name: Terraform apply
     needs: terraform-plan
     outputs:
-      acr_login_server: ${{ steps.get-acr.outputs.acr_server }}
-      acr_name: ${{ steps.get-acr.outputs.acr_name }}
+      acr_login_server: ${{ steps.get-outputs.outputs.acr_login_server }}
+      acr_name: ${{ steps.get-outputs.outputs.acr_name }}
+      kube_config: ${{ steps.get-outputs.outputs.kube_config }}
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -99,7 +97,7 @@ jobs:
         run: terraform apply -var-file="./tfvars/dev.tfvars" -auto-approve tfapply
 
       - name: Get Terraform outputs
-        id: get-acr
+        id: get-outputs
         env:
           ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
@@ -107,12 +105,26 @@ jobs:
           ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
           ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
         run: |
-          acr_server=$(terraform output -raw acr_login_server)
           acr_name=$(terraform output -raw acr_name)
-          echo "acr_name=$acr_name"
-          echo "acr_server=$acr_server"
+          acr_login_server=$(terraform output -raw acr_login_server)
           echo "acr_name=$acr_name" >> $GITHUB_OUTPUT
-          echo "acr_server=$acr_server" >> $GITHUB_OUTPUT
+          echo "acr_login_server=$acr_login_server" >> $GITHUB_OUTPUT
+
+      - name: Get kube config file
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_ACCESS_KEY: ${{ secrets.AZURE_STORAGE_ACCOUNT_ACCESS_KEY }}
+        run: |
+          terraform output -raw kube_config > config
+
+      - name: Upload kubeconfig artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config
+          path: ./terraform/config
 
   docker:
     name: Build and push docker image
@@ -141,3 +153,63 @@ jobs:
 
       - name: Push to ACR
         run: docker push ${{ needs.terraform-apply.outputs.acr_login_server }}/challenge/hellochallenge
+
+  helmfile:
+    name: Helmfile apply
+    needs: docker
+    runs-on: ubuntu-latest
+    env:
+      STAGE: "stg"
+    defaults:
+      run:
+        working-directory: ./helm
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+    
+      - name: Download kube config artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: config
+          path: ./helm
+
+      - name: Configure kube config
+        run: |
+          mkdir -p $HOME/.kube
+          cp config $HOME/.kube/config
+
+      - name: Install Helm plugins
+        run: |
+          helm plugin install https://github.com/jkroepke/helm-secrets
+          helm plugin install https://github.com/databus23/helm-diff
+
+      - name: Install Helmfile
+        run: |
+          wget https://github.com/helmfile/helmfile/releases/download/v1.0.0-rc.12/helmfile_1.0.0-rc.12_linux_amd64.tar.gz -O helmfile.tar.gz
+          tar -xzf helmfile.tar.gz
+          chmod +x helmfile
+          sudo mv helmfile /usr/local/bin/helmfile
+
+      - name: Helmfile Diff
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: helmfile -e $STAGE diff
+
+      - name: Helmfile Apply with secrets
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: helmfile -e $STAGE apply
+
+      - name: Restart deployment
+        env:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: kubectl rollout restart deployment hello-deployment

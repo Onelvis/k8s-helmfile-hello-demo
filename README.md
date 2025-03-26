@@ -89,3 +89,9 @@ NAME         TYPE           CLUSTER-IP    EXTERNAL-IP      PORT(S)        AGE
 hello        LoadBalancer   10.0.103.28  copy this-> 134.33.154.147   80:31829/TCP   21h
 kubernetes   ClusterIP      10.0.0.1      <none>           443/TCP        36h
 ```
+
+## Questions
+
+> How to change the stage that Github Actions deploys?
+
+Change the environment variable defined in line `162` of `provision-infra.yaml`, or implement a branch or path filtering approach.
